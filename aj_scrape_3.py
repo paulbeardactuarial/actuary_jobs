@@ -8,9 +8,8 @@ from urllib.parse import quote
 import pandas as pd
 from datetime import datetime
 
+
 # %%
-
-
 class WaybackJobScraper:
     def __init__(self, date_range=[None, None]):
         self.base_url = "https://web.archive.org/web/"
@@ -73,6 +72,21 @@ class WaybackJobScraper:
         self.web_strings = filtered_date_range
         return (filtered_date_range)
 
+    def find_section_header(self, soup, header_text):
+        """Find section header - handles both h4 and button elements"""
+        # Try h4 first (form 1)
+        header = soup.find('h4', string=re.compile(header_text, re.IGNORECASE))
+        if header:
+            return header
+
+        # Try button (form 2) - text might be nested inside
+        buttons = soup.find_all('button', class_='category-header')
+        for button in buttons:
+            if re.search(header_text, button.get_text(strip=True), re.IGNORECASE):
+                return button
+
+        return None
+
     def extract_job_type_counts(self, soup, timestamp):
         """
         Extract permanent and interim job counts from the HTML content
@@ -84,8 +98,7 @@ class WaybackJobScraper:
         possible_headers = ['Job type', 'Type', 'Employment type']
 
         for header_text in possible_headers:
-            header = soup.find('h4', string=re.compile(
-                header_text, re.IGNORECASE))
+            header = self.find_section_header(soup, header_text)
             if header:
                 # Find the associated ul element
                 content_div = header.find_next_sibling('div')
@@ -131,8 +144,7 @@ class WaybackJobScraper:
         sector_counts = {}
 
         # Look for the Sector header
-        sector_header = soup.find(
-            'h4', string=re.compile('Sector', re.IGNORECASE))
+        sector_header = self.find_section_header(soup, 'Sector')
 
         if sector_header:
             # Find the associated content div
@@ -169,8 +181,7 @@ class WaybackJobScraper:
         location_counts = {}
 
         # Look for the Location header
-        location_header = soup.find(
-            'h4', string=re.compile('Location', re.IGNORECASE))
+        location_header = self.find_section_header(soup, 'Location')
 
         if location_header:
             # Find the associated content div
@@ -437,7 +448,7 @@ class WaybackJobScraper:
 if __name__ == "__main__":
     # Create scraper instance
     date_range = []
-    date_range.append(datetime.strptime("2015-12-07", "%Y-%m-%d"))
+    date_range.append(datetime.strptime("2015-12-06", "%Y-%m-%d"))
     date_range.append(datetime.strptime("2026-01-01", "%Y-%m-%d"))
 
     scraper = WaybackJobScraper(date_range)
@@ -461,6 +472,5 @@ if __name__ == "__main__":
                 # Show first 5 locations
                 print(
                     f"  Locations: {list(result['locations'].keys())[:5]}...")
-
 
 # %%

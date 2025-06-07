@@ -426,8 +426,8 @@ if __name__ == "__main__":
 
     # get date ranges
     date_range = []
-    date_range.append(datetime.strptime("2000-01-01", "%Y-%m-%d"))
-    date_range.append(datetime.strptime("2015-12-01", "%Y-%m-%d"))
+    date_range.append(datetime.strptime("2013-05-13", "%Y-%m-%d"))
+    date_range.append(datetime.strptime("2015-12-06", "%Y-%m-%d"))
 
     # Create legacy scraper instance
     scraper = LegacyWaybackJobScraper(date_range)
@@ -456,8 +456,8 @@ if __name__ == "__main__":
 
 # %%
 date_range = []
-date_range.append(datetime.strptime("2000-01-01", "%Y-%m-%d"))
-date_range.append(datetime.strptime("2015-12-01", "%Y-%m-%d"))
+date_range.append(datetime.strptime("2013-01-01", "%Y-%m-%d"))
+date_range.append(datetime.strptime("2014-01-01", "%Y-%m-%d"))
 date_range
 scraper = LegacyWaybackJobScraper(date_range)
 snapshots = scraper.find_available_snapshots()
