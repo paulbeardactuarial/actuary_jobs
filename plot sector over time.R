@@ -29,7 +29,7 @@ latest_data <-
   ) |> 
   dplyr::mutate(date = as.Date("2025-06-07"), .before = 1)
 
-categories_to_other <- c("Banking and finance", "Health", "Hedge funds", "IT")
+categories_to_other <- c("Banking and finance", "Health", "Hedge funds", "IT", "Investment")
 
 
 raw_fields_req <- c("date", "sector", "job_count")
@@ -55,7 +55,8 @@ jobs_data_clean <-
       "Other",
       sector
       )
-  )
+  ) |> 
+  dplyr::summarise(job_count = sum(job_count), .by = c("date", "sector"))
 
 
 p <-
@@ -127,13 +128,6 @@ bump_plot_data |>
     position = "fill",
     width = 0.9,
     alpha = 1) +
-  # geom_text(
-  #   data = bump_plot_data |> dplyr::filter(year == 2025),
-  #   mapping = aes(label = sector),
-  #   hjust = 0,
-  #   nudge_x = 0.25,
-  #   size = 4
-  # ) +
   scale_fill_discrete(name = "") +
   scale_x_continuous(
     expand = c(0, 0),
@@ -158,4 +152,31 @@ bump_plot_data |>
   ) 
 
 
-jobs_data_clean |> dplyr::count(date, wt = job_count) |> View()
+bump_plot_data |> 
+  dplyr::mutate(prop = job_count/sum(job_count), .by = year) |> 
+  ggplot() +
+  aes(x = year, 
+      y = prop, 
+      color = forcats::fct_rev(sector)) +
+  geom_line() +
+  facet_wrap(vars(sector)) +
+  scale_x_continuous(
+    breaks = seq(from=2013, 2025, by = 2),
+    labels = seq(from=2013, 2025, by = 2),
+    name = "") +
+  scale_y_continuous(
+    labels = scales::label_percent(accuracy = 1),
+    name = "Proprtion of Sector Type** Posted (%)") +
+  labs(caption = "** Note jobs posted can be assigned multiple sector types") + 
+  theme_bw() +
+  theme(
+    plot.title = element_text(color = data_color, face = "bold", size = 20),
+    plot.subtitle = element_text(color = data_color, face = "bold", size = 10),
+    axis.text.x = element_text(angle = 90, vjust = 0.5),
+    # panel.grid.major.x  = element_blank(),
+    # panel.grid.major.y = element_blank(),
+    # panel.grid.minor.y  = element_blank(),
+    # panel.grid.minor.x = element_blank(),
+    # panel.border = element_blank(),
+    legend.position = "none"
+  ) 
