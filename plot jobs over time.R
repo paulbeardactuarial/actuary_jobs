@@ -4,10 +4,29 @@ library(zoo)
 library(lubridate)
 library(patchwork)
 
-jobs_data_raw <- readr::read_csv("./wayback_job_stats.csv")
+jobs_data_raw <- readr::read_csv("./wayback_job_stats_summary.csv")
+retro_jobs_data_raw <- readr::read_csv("./legacy_wayback_job_stats_summary.csv")
+
+# manually create a scrape of the latest job posting numbers
+latest_data <-
+  tibble::tibble(
+    date = as.Date("2025-06-07"), 
+    permanent_jobs = 371, 
+    interim_jobs = 19
+  )
+
+
+raw_fields_req <- c("date", "permanent_jobs", "interim_jobs")
+
+data_raw <-
+  rbind(
+    jobs_data_raw |> dplyr::select(all_of(raw_fields_req)), 
+    retro_jobs_data_raw |> dplyr::select(dplyr::all_of(raw_fields_req)),
+    latest_data
+    )
 
 jobs_data_clean <- 
-jobs_data_raw |> 
+data_raw |> 
   janitor::clean_names() |> 
   dplyr::filter(!is.na(permanent_jobs)) |> 
   dplyr::select(date, permanent_jobs, interim_jobs) |> 
@@ -15,7 +34,9 @@ jobs_data_raw |>
   dplyr::mutate(
     type = stringr::str_remove(type, "_jobs"),
     date = as.Date(date, tryFormats = "%d/%m/%Y")
-    )
+    ) |> 
+  unique() |> 
+  dplyr::arrange(date) 
 
 # interim plot
 
@@ -26,7 +47,7 @@ llm_date_line <- c("2022-12-31", "2023-12-01")
 covid_date_line <- c("2020-03-1", "2018-03-23")
 data_color <- "forestgreen"
 
-p1 <-
+p_interim <-
 jobs_data_clean |> 
   filter(type == "interim") |> 
   # thin out overly dense sections by only having 1 date point per 2 month window
@@ -72,8 +93,8 @@ jobs_data_clean |>
   ) +
   annotate(
     "text",
-    x = max(as.Date(llm_date_line)),
-    y = arrow_y_vals[2] * 1.05,
+    x = max(as.Date(llm_date_line)) %m+% months(5),
+    y = arrow_y_vals[2] * 1.1,
     size = 3.5,
     label = glue::glue(
       "ChatGPT first 
@@ -102,12 +123,12 @@ jobs_data_clean |>
 
 plot_type <- "permanent"
 
-arrow_y_vals <- c(300, 250)
+arrow_y_vals <- c(300, 200)
 llm_date_line <- c("2022-12-31", "2023-12-01")
 covid_date_line <- c("2020-03-1", "2018-03-23")
 data_color <- "violet"
 
-p2 <-
+p_perm <-
 jobs_data_clean |> 
   filter(type == plot_type) |> 
   # thin out overly dense sections by only having 1 date point per 2 month window
@@ -141,7 +162,7 @@ jobs_data_clean |>
   annotate(
     "text",
     x = min(as.Date(covid_date_line)),
-    y = arrow_y_vals[2] * 0.9,
+    y = arrow_y_vals[2] * 0.7,
     size = 3.5,
     label = "first Covid lockdown"
   ) +
@@ -154,7 +175,7 @@ jobs_data_clean |>
   annotate(
     "text",
     x = max(as.Date(llm_date_line)) %m+% months(5),
-    y = arrow_y_vals[2] * 0.75,
+    y = arrow_y_vals[2] * 0.65,
     size = 3.5,
     label = glue::glue(
       "ChatGPT first 
@@ -181,7 +202,7 @@ jobs_data_clean |>
   )  
 
 
-p2
+ggsave("permanent.png", p_perm, dpi = 1000, width = 6, height = 3.75, units = "in")
+ggsave("interim.png", p_interim, dpi = 1000, width = 6, height = 3.75, units = "in")
 
-p1
 
