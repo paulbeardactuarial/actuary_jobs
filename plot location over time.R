@@ -8,7 +8,7 @@ library(ggiraph)
 jobs_data_raw <- readr::read_csv("./wayback_job_stats_locations.csv")
 retro_jobs_data_raw <- readr::read_csv("./legacy_wayback_job_stats_locations.csv")
 
-plot_color <- "violet"
+days_cool_off_after_data <- 45
 
 # manually create a scrape of the latest job posting numbers
 latest_data <-
@@ -62,6 +62,28 @@ data_raw <-
     latest_data
   )
 
+
+# get dates that we are going to retain
+# thin out by having `days_cool_off_after_data` cooling period after each date point
+dates_used <- 
+data_raw |> 
+  janitor::clean_names() |>  
+  dplyr::mutate(
+    date = as.Date(date, tryFormats = "%d/%m/%Y")
+  ) |> 
+  dplyr::pull(date) |> 
+  unique() |> 
+  sort() |> 
+  purrr::accumulate(
+    .f = function(x, y) {
+      if(x %m+% days(days_cool_off_after_data) > y) {x} else {y}
+    }) |> 
+  unique() 
+
+# clean the data by:
+# 1. consolidating some of the locations
+# 2. pruning dates to space out
+# 3. adding in rows with zero job_count when they are missing (needed for averages later)
 jobs_data_clean <- 
   data_raw |> 
   janitor::clean_names() |>  
@@ -82,41 +104,78 @@ jobs_data_clean <-
     )
   ) |> 
   dplyr::summarise(job_count = sum(job_count), .by = c("date", "location")) |> 
-  dplyr::filter(!location %in% c("England", "Abroad"))
-
-
-
-plot_data <-
+  dplyr::filter(!location %in% c("England", "Abroad")) |>  
+  dplyr::filter(date %in% dates_used) |> 
+  tidyr::complete(
+    date, 
+    location,
+    fill = list(job_count = 0)
+  )
+    
+plot_data <- 
   jobs_data_clean |> 
-  # thin out overly dense sections by having 30 day cooling period after each date point
-  dplyr::arrange(location, date) |> 
-  dplyr::mutate(
-    fresh_date = purrr::accumulate(
-      .x = date, 
-      .f = function(x, y) {
-        if(x %m+% days(30) > y) {x} else {y}
-      }),
-    .by = location
-  ) |>
-  dplyr::filter(date == fresh_date) |> 
   dplyr::mutate(year = lubridate::year(date)) |> 
+  dplyr::mutate(
+    year_band = dplyr::case_when(
+      dplyr::between(date, as.Date("2014-01-01"), as.Date("2015-12-31")) ~ "2014/15",
+      dplyr::between(date, as.Date("2023-01-01"), as.Date("2024-12-31")) ~ "2023/24",
+      .default = "Other"
+    )
+  ) |> 
   dplyr::summarise(
     job_count = mean(job_count, na.rm = T), 
     data_points = dplyr::n(),
-    .by = c("year", "location")
+    .by = c("year_band", "location")
     ) |> 
-  dplyr::mutate(location = forcats::fct_reorder2(location, year, job_count)) |> 
+  dplyr::mutate(location = forcats::fct_reorder2(location, year_band, job_count)) |> 
   dplyr::mutate(NUTS_NAME = 
                   location |> 
                   stringr::str_remove("\\(") |> 
                   stringr::str_remove("\\)") |> 
                   toupper()
-                  )
+                  ) 
 
 
 
-uk_map_data <- 
-giscoR::gisco_get_nuts(country = "UK", nuts_level = 1) |> 
+
+# =====================================================================
+# ================= collect UK geometry map data =====================
+# =====================================================================
+
+uk_nuts_data <- giscoR::gisco_get_nuts(country = "UK", nuts_level = 1)
+
+create_circle <- function(center_x, center_y, radius, n_points = 50) {
+  angles <- seq(0, 2*pi, length.out = n_points + 1)
+  x_coords <- center_x + radius * 1.65 * cos(angles) # 1.65 to counteract distortion of map at UK latitude
+  y_coords <- center_y + radius * sin(angles)
+  
+  # Return as matrix (required for sf polygons)
+  cbind(x_coords, y_coords)
+}
+
+# Position to the right of UK
+center_x <- uk_bbox[3]  
+center_y <- mean(c(uk_bbox[2], uk_bbox[4]))
+radius <- 0.5 
+
+# Create the circle coordinates
+circle_coords <- create_circle(center_x, center_y, radius)
+
+# Create the sf geometry
+hw_geometry <- sf::st_sfc(
+  sf::st_multipolygon(
+    list(list(circle_coords))  
+  ),
+  crs = sf::st_crs(uk_nuts_data)
+)
+
+
+uk_map_data <- uk_nuts_data |> 
+  dplyr::add_row(
+    NAME_LATN = "Homeworking",
+    NUTS_NAME = "Homeworking",
+    geometry = hw_geometry
+  ) |> 
   dplyr::mutate(NUTS_NAME = 
                   NUTS_NAME |> 
                   stringr::str_remove("\\(") |> 
@@ -125,47 +184,54 @@ giscoR::gisco_get_nuts(country = "UK", nuts_level = 1) |>
   ) |> 
   dplyr::right_join(plot_data, by = "NUTS_NAME") 
 
-uk_map_data_homeworking <- 
-  plot_data |> 
-  dplyr::filter(location == "Homeworking") |> 
-  dplyr::mutate(x = 1.5, y = 55)
 
-uk_map_p <-
+
+
+
+# =====================================================================
+# ========================= plot UK map data =========================
+# =====================================================================
+p_uk <-
 uk_map_data |> 
+  dplyr::filter(!year_band %in% "Other") |> 
   ggplot() +
   aes(fill = job_count) +
   geom_sf_interactive() + 
-  scale_fill_continuous() +
   theme_void() + 
-  geom_point_interactive(
-    data = uk_map_data_homeworking,
-    shape = 1,
-    mapping = aes(x = x, y = y), size = 15
-    ) +
-  scale_fill_gradient(low = "white", high = "blue") +
+  scale_fill_gradient(
+    name = "",
+    low = "white", 
+    high = "darkblue", 
+    transform = "sqrt",
+    guide = guide_colorbar(barheight = 0.6),
+    breaks = c(0, 100, 400)) +
   theme(
-    legend.position = "none"
+    legend.position = "bottom",
+    panel.spacing = unit(3.15, "cm"),
+    plot.title = element_text(color = "darkblue", face = "bold", size = 20),
+    plot.subtitle = element_text(color = "darkblue", face = "bold", size = 10, margin = margin(t = 6, b = 10)),
+    plot.caption = element_text(hjust = 0),
+    strip.text = element_text(size = rel(1.2)),
+    plot.margin = margin(t = 3, r = 5, b = 5, l = 5, unit = "pt"),
+    plot.background = element_rect(fill = "white", colour = NULL),
+    legend.margin = margin(b = 15)  # Gap below legend
+  ) +
+  annotate(
+    "text",
+    x = center_x,
+    y = center_y - 0.8,
+    label = "Remote",
+    size = 2.5
+  ) + 
+  facet_wrap(vars(year_band)) +
+  labs(
+    title = "Location* of Job Postings in UK",
+    subtitle = "As found on https://www.theactuaryjobs.com/jobs/",
+    caption = "* Note that multiple locations can be assigned to the same job posting"
   )
 
-girafe(ggobj = uk_map_p)
+ggsave("plot_jobs_uk.png", p_uk, dpi = 800, width = 5, height = 5, units = "in")
 
-plot_data |> 
-  ggplot() +
-  aes(x = year, 
-      y = job_count, 
-      fill = forcats::fct_rev(location)) +
-  geom_col() +
-  facet_wrap(vars(location)) +
-  scale_x_continuous(
-    breaks = seq(from=2013, 2025, by = 2),
-    labels = seq(from=2013, 2025, by = 2),
-    name = "") +
-  labs(caption = "** Note jobs posted can be assigned multiple location types") + 
-  theme_bw() +
-  theme(
-    plot.title = element_text(color = plot_color, face = "bold", size = 20),
-    strip.background = element_rect(fill = plot_color),
-    plot.subtitle = element_text(color = plot_color, face = "bold", size = 10),
-    axis.text.x = element_text(angle = 90, vjust = 0.5),
-    legend.position = "none"
-  ) 
+
+
+
