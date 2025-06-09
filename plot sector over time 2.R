@@ -183,7 +183,7 @@ p <-
   ) +
   facet_wrap(vars(sector)) +
   scale_y_continuous(
-    name = "No. of Jobs On-site"
+    name = "No. of Job Postings"
   ) +
   scale_color_brewer(palette = "Set1") +
   scale_x_date(
