@@ -7,6 +7,11 @@ library(patchwork)
 jobs_data_raw <- readr::read_csv("./wayback_job_stats_summary.csv")
 retro_jobs_data_raw <- readr::read_csv("./legacy_wayback_job_stats_summary.csv")
 
+# some of the datapoints are bunched together. The code applies a cooling period of `x` days 
+# to prevent counting too many similar snapshots. 
+# Note actuaryjobs posts expire after 28 days by default
+days_cool_off_after_data <- 45
+
 # manually create a scrape of the latest job posting numbers
 latest_data <-
   tibble::tibble(
@@ -36,23 +41,31 @@ data_raw |>
     date = as.Date(date, tryFormats = "%d/%m/%Y")
     ) |> 
   unique() |> 
-  dplyr::arrange(date) 
+  # thin out overly dense sections by having `days_cool_off_after_data` cooling period after each date point
+  dplyr::arrange(type, date) |> 
+  dplyr::mutate(
+    fresh_date = purrr::accumulate(
+      .x = date, 
+      .f = function(x, y) {
+        if(x %m+% days(days_cool_off_after_data) > y) {x} else {y}
+      }),
+    .by = type
+  ) |>
+  dplyr::filter(date == fresh_date) |> 
+  dplyr::select(-fresh_date)
 
 # interim plot
 
 plot_type <- "interim, contract & temp"
 
-arrow_y_vals <- c(80, 90)
-llm_date_line <- c("2022-12-31", "2023-12-01")
-covid_date_line <- c("2020-03-1", "2018-03-23")
+arrow_y_vals <- c(90, 110)
+sii_date_line <- c("2016-01-01", "2018-01-01")
+covid_date_line <- c("2020-03-23", "2022-03-23")
 data_color <- "forestgreen"
 
 p_interim <-
 jobs_data_clean |> 
   filter(type == "interim") |> 
-  # thin out overly dense sections by only having 1 date point per 2 month window
-  dplyr::mutate(floored_date = lubridate::floor_date(date, unit = "bimonth")) |> 
-  dplyr::slice_head(by = floored_date) |>
   # get rolling mean
   mutate(mean_postings = rollmedian(value, k = 5, align = "center", fill = NA)) |> 
   ggplot() +
@@ -70,35 +83,36 @@ jobs_data_clean |>
     ) +
   geom_vline(
     linetype = 2,
-    xintercept = as.Date("2022-11-30")
+    xintercept = as.Date("2016-01-01")
     ) +
   annotate(
     "line",
     x = as.Date(covid_date_line),
     y = arrow_y_vals,
-    arrow = arrow(length = unit(0.1, "inches"))
+    arrow = arrow(length = unit(0.1, "inches"), ends = "first")
   ) +
   annotate(
     "text",
-    x = min(as.Date(covid_date_line)),
-    size = 3.5,
-    y = arrow_y_vals[2] * 1.05,
-    label = "first Covid lockdown"
+    x = max(as.Date(covid_date_line)),
+    y = arrow_y_vals[2] * 1.1,
+    size = 3,
+    label = "First Covid 
+lockdown"
   ) +
   annotate(
     "line",
-    x = as.Date(llm_date_line),
+    x = as.Date(sii_date_line),
     y = arrow_y_vals,
     arrow = arrow(length = unit(0.1, "inches"), ends = "first")
   ) +
   annotate(
     "text",
-    x = max(as.Date(llm_date_line)) %m+% months(5),
+    x = max(as.Date(sii_date_line)) %m+% months(2),
     y = arrow_y_vals[2] * 1.1,
-    size = 3.5,
+    size = 3,
     label = glue::glue(
-      "ChatGPT first 
-      released to public"
+      "Solvency II 
+      comes into effect"
     )
   ) +
   scale_x_date(
@@ -123,17 +137,14 @@ jobs_data_clean |>
 
 plot_type <- "permanent"
 
-arrow_y_vals <- c(300, 200)
-llm_date_line <- c("2022-12-31", "2023-12-01")
-covid_date_line <- c("2020-03-1", "2018-03-23")
+arrow_y_vals <- c(350, 200)
+sii_date_line <- c("2016-01-01", "2018-01-01")
+covid_date_line <- c("2020-03-23", "2022-03-23")
 data_color <- "violet"
 
 p_perm <-
 jobs_data_clean |> 
   filter(type == plot_type) |> 
-  # thin out overly dense sections by only having 1 date point per 2 month window
-  dplyr::mutate(floored_date = lubridate::floor_date(date, unit = "bimonth")) |> 
-  dplyr::slice_head(by = floored_date) |>
   # get rolling mean
   mutate(mean_postings = rollmedian(value, k = 5, align = "center", fill = NA)) |> 
   ggplot() +
@@ -151,35 +162,36 @@ jobs_data_clean |>
   ) +
   geom_vline(
     linetype = 2,
-    xintercept = as.Date("2022-11-30")
+    xintercept = as.Date("2016-01-01")
   ) +
   annotate(
     "line",
     x = as.Date(covid_date_line),
     y = arrow_y_vals,
-    arrow = arrow(length = unit(0.1, "inches"))
+    arrow = arrow(length = unit(0.1, "inches"), ends = "first")
   ) +
   annotate(
     "text",
-    x = min(as.Date(covid_date_line)),
-    y = arrow_y_vals[2] * 0.7,
-    size = 3.5,
-    label = "first Covid lockdown"
+    x = max(as.Date(covid_date_line)),
+    y = arrow_y_vals[2] * 0.64,
+    size = 3,
+    label = "First Covid 
+lockdown"
   ) +
   annotate(
     "line",
-    x = as.Date(llm_date_line),
+    x = as.Date(sii_date_line),
     y = arrow_y_vals,
     arrow = arrow(length = unit(0.1, "inches"), ends = "first")
   ) +
   annotate(
     "text",
-    x = max(as.Date(llm_date_line)) %m+% months(5),
-    y = arrow_y_vals[2] * 0.65,
-    size = 3.5,
+    x = max(as.Date(sii_date_line)) %m+% months(2),
+    y = arrow_y_vals[2] * 0.64,
+    size = 3,
     label = glue::glue(
-      "ChatGPT first 
-      released to public"
+      "Solvency II 
+      comes into effect"
     )
   ) +
   scale_x_date(
@@ -200,7 +212,7 @@ jobs_data_clean |>
     axis.text.x = element_text(angle = 45, hjust = 1),
     panel.border = element_blank()
   )  
-
+p_perm
 
 ggsave("permanent.png", p_perm, dpi = 1000, width = 6, height = 3.75, units = "in")
 ggsave("interim.png", p_interim, dpi = 1000, width = 6, height = 3.75, units = "in")
