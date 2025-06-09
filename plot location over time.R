@@ -208,7 +208,7 @@ uk_map_data |>
   geom_sf_interactive() + 
   theme_void() + 
   scale_fill_gradient(
-    name = "",
+    name = "Average No. of Job Postings up at a Time",
     low = "white", 
     high = "darkblue", 
     transform = "sqrt",
@@ -216,6 +216,8 @@ uk_map_data |>
     breaks = c(0, 100, 400)) +
   theme(
     legend.position = "bottom",
+    legend.title.position = "top",
+    legend.title = element_text(hjust = 0.5, size = 9),
     panel.spacing = unit(2, "cm"),
     plot.title = element_text(color = "darkblue", face = "bold", size = 20),
     plot.subtitle = element_text(color = "darkblue", face = "bold", size = 10, margin = margin(t = 8, b = 14)),
@@ -238,6 +240,7 @@ uk_map_data |>
     subtitle = "As found on https://www.theactuaryjobs.com/jobs/",
     caption = "* Note that multiple locations can be assigned to the same job posting"
   )
+
 
 ggsave("location.png", p_uk, dpi = 800, width = 5, height = 5, units = "in")
 
