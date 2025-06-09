@@ -191,11 +191,11 @@ p <-
     date_breaks = "2 year",
     limits = as.Date(c(NA, "2026-01-01"))
   ) +
-  labs(caption = "* Note jobs posted can be assigned multiple sector types") +
   theme_bw() +
   labs(
     title = "Job postings by Sector*",
-    subtitle = "As found on https://www.theactuaryjobs.com/jobs/"
+    subtitle = "As found on https://www.theactuaryjobs.com/jobs/",
+    caption = "* Note that multiple sectors can be assigned to the same job posting"
   ) +
   theme(
     plot.title = element_text(color = plot_color, face = "bold", size = 20),
