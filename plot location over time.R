@@ -5,6 +5,10 @@ library(lubridate)
 library(patchwork)
 library(ggiraph)
 
+# ===================================================================
+# ====================== collect data ===============================
+# ===================================================================
+
 jobs_data_raw <- readr::read_csv("./wayback_job_stats_locations.csv")
 retro_jobs_data_raw <- readr::read_csv("./legacy_wayback_job_stats_locations.csv")
 
@@ -32,6 +36,20 @@ latest_data <-
   ) |> 
   dplyr::mutate(date = as.Date("2025-06-07"), .before = 1)
 
+raw_fields_req <- c("date", "location", "job_count")
+
+data_raw <-
+  rbind(
+    jobs_data_raw |> dplyr::select(all_of(raw_fields_req)), 
+    retro_jobs_data_raw |> dplyr::select(dplyr::all_of(raw_fields_req)),
+    latest_data
+  )
+
+
+
+# ===================================================================
+# ====================== clean data =================================
+# ===================================================================
 
 categories_to_england <- c("Nationwide", "England", "Europe")
 
@@ -52,16 +70,6 @@ categories_to_abroad <- c(
 "Ireland",
 "Republic of Ireland"
 )
-
-raw_fields_req <- c("date", "location", "job_count")
-
-data_raw <-
-  rbind(
-    jobs_data_raw |> dplyr::select(all_of(raw_fields_req)), 
-    retro_jobs_data_raw |> dplyr::select(dplyr::all_of(raw_fields_req)),
-    latest_data
-  )
-
 
 # get dates that we are going to retain
 # thin out by having `days_cool_off_after_data` cooling period after each date point
@@ -139,7 +147,7 @@ plot_data <-
 
 
 # =====================================================================
-# ================= collect UK geometry map data =====================
+# ================= get UK geometry map data and join =================
 # =====================================================================
 
 uk_nuts_data <- giscoR::gisco_get_nuts(country = "UK", nuts_level = 1)
@@ -154,6 +162,7 @@ create_circle <- function(center_x, center_y, radius, n_points = 50) {
 }
 
 # Position to the right of UK
+uk_bbox <- sf::st_bbox(uk_nuts_data)
 center_x <- uk_bbox[3]  
 center_y <- mean(c(uk_bbox[2], uk_bbox[4]))
 radius <- 0.5 
@@ -207,13 +216,13 @@ uk_map_data |>
     breaks = c(0, 100, 400)) +
   theme(
     legend.position = "bottom",
-    panel.spacing = unit(3.15, "cm"),
+    panel.spacing = unit(2, "cm"),
     plot.title = element_text(color = "darkblue", face = "bold", size = 20),
-    plot.subtitle = element_text(color = "darkblue", face = "bold", size = 10, margin = margin(t = 6, b = 10)),
+    plot.subtitle = element_text(color = "darkblue", face = "bold", size = 10, margin = margin(t = 8, b = 14)),
     plot.caption = element_text(hjust = 0),
-    strip.text = element_text(size = rel(1.2)),
-    plot.margin = margin(t = 3, r = 5, b = 5, l = 5, unit = "pt"),
-    plot.background = element_rect(fill = "white", colour = NULL),
+    strip.text = element_text(size = rel(1.1), face = "bold"),
+    plot.margin = margin(t = 6, r = 5, b = 10, l = 5, unit = "pt"),
+    plot.background = element_rect(fill = "white", colour = "white"),
     legend.margin = margin(b = 15)  # Gap below legend
   ) +
   annotate(
@@ -230,7 +239,7 @@ uk_map_data |>
     caption = "* Note that multiple locations can be assigned to the same job posting"
   )
 
-ggsave("plot_jobs_uk.png", p_uk, dpi = 800, width = 5, height = 5, units = "in")
+ggsave("location.png", p_uk, dpi = 800, width = 5, height = 5, units = "in")
 
 
 
