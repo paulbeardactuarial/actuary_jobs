@@ -96,19 +96,8 @@ jobs_data_clean <-
 
 
 # =====================================================================
-# ============================= plot ==================================
+# ======================== construct a rolling mean ===================
 # =====================================================================
-
-plot_data <-
-  jobs_data_clean |>
-  dplyr::summarise(job_count = sum(job_count), .by = c("date", "sector")) |>
-  dplyr::mutate(year = lubridate::year(date)) |>
-  dplyr::summarise(
-    job_count = mean(job_count, na.rm = T),
-    data_points = dplyr::n(),
-    .by = c("year", "sector")
-  ) |>
-  dplyr::mutate(sector = forcats::fct_reorder2(sector, year, job_count))
 
 sectors_to_plot <- c("General insurance", "Life insurance", "Pensions", "Investment")
 
@@ -122,6 +111,9 @@ mean_jobs_df <-
     sector = sectors_to_plot
   )
 
+# adding a rolling mean for `job_count`. 
+# The value will be the mean of `jobs_data_clean$job_count` where the date is within +-6 months of that point
+# In cases where there are less than 3 data points, the value of `job_count` is converted to NA
 mean_jobs_df <-
   mean_jobs_df |>
   dplyr::mutate(
@@ -144,12 +136,17 @@ mean_jobs_df <-
     job_count = dplyr::if_else(data_points < 3, NA, job_count)
   )
 
+# pull a range (should be vector of 2) for the limited data bit (is arouund 2018/2019)
 limited_data <-
   mean_jobs_df |>
   dplyr::filter(sector %in% sectors_to_plot) |>
   dplyr::filter(is.na(job_count)) |>
   dplyr::pull(date) |>
   range()
+
+# =====================================================================
+# ============================= plot ==================================
+# =====================================================================
 
 p <-
   mean_jobs_df |>
