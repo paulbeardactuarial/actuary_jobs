@@ -194,7 +194,7 @@ p <-
     date_breaks = "2 year",
     limits = as.Date(c(NA, "2026-01-01"))
   ) +
-  labs(caption = "** Note jobs posted can be assigned multiple sector types") +
+  labs(caption = "* Note jobs posted can be assigned multiple sector types") +
   theme_bw() +
   labs(
     title = "Job postings by Sector*",
@@ -204,8 +204,9 @@ p <-
     plot.title = element_text(color = plot_color, face = "bold", size = 20),
     strip.background = element_rect(fill = plot_color),
     plot.subtitle = element_text(color = plot_color, face = "bold", size = 10),
-    axis.text.x = element_text(angle = 90, vjust = 0.5),
-    legend.position = "none"
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    legend.position = "none",
+    plot.caption = element_text(hjust = 0),
   )
 
 
